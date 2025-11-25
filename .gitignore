@@ -1,0 +1,34 @@
+# Build output
+build/
+
+# Qt generated folders
+*.qrc.dep
+*.moc
+*.qmake.stash
+.qmake.cache
+.qt/
+*.qm
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.ninja
+
+# Visual Studio/MSVC
+*.obj
+*.o
+*.pdb
+*.idb
+*.ilk
+*.exe
+*.dll
+*.lib
+*.tlog
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# VSCode settings (not recommended to commit)
+.vscode/
