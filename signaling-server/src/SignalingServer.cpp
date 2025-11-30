@@ -83,7 +83,7 @@ void SignalingServer::dispatchMessage(const SignalingTask& task, Worker* worker)
 
     QJsonObject rootJson = doc.object();
     
-    // B. »ñÈ¡ÏûÏ¢ÀàÐÍ
+    // B. ï¿½ï¿½È¡ï¿½ï¿½Ï¢ï¿½ï¿½ï¿½ï¿½
     if (!rootJson.contains("type") || !rootJson["type"].isString()) {
         handleError("Invalid type", task._clientId, worker);
         return;
@@ -129,7 +129,7 @@ void SignalingServer::handleRegister(const QJsonArray& sessionList, const QJsonO
 
         for (const QJsonValue& val : sessionList) {
             QString targetId = val.toString();
-            // Ìø¹ý×Ô¼º (ËäÈ» sessionList Í¨³£²»°üº¬×Ô¼º£¬µ«·ÀÓùÐÔ±à³Ì)
+            // ï¿½ï¿½ï¿½ï¿½ï¿½Ô¼ï¿½ (ï¿½ï¿½È» sessionList Í¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô±ï¿½ï¿½)
             if (targetId == srcId) continue;
 
             jsonNotify["to"] = targetId;
@@ -207,7 +207,7 @@ void SignalingServer::handleAnswer(const QJsonArray& sessionList, const QJsonObj
     qDebug() << "Forwarded ANSWER from" << srcId << "to" << targetId;
 }
 
-// ´¦Àí ICE Candidate ×ª·¢
+// ï¿½ï¿½ï¿½ï¿½ ICE Candidate ×ªï¿½ï¿½
 void SignalingServer::handleIce(const QJsonArray& sessionList, const QJsonObject& jsonObj, 
     const QString& srcId, Worker* worker)
 {
@@ -255,7 +255,7 @@ void SignalingServer::handleError(const QString& message, const QString& clientI
     emit worker->sigSendResponse(clientId, QString(payload));
 }
 
-QJsonArray SignalingServer::getPeertList()  
+QJsonArray SignalingServer::getPeerList()  
 {  
    QJsonArray jsonArray;  
    for (auto it = _sessions.begin(); it != _sessions.end(); ++it) {  
@@ -298,13 +298,13 @@ void SignalingServer::onClientDataReady(const QString& srcId, const QString& dat
     _workerPool->submitTask(task);
 }
 
-void SignalingServer::onWorkerResult(const QString& targetClinet, const QString& message)
+void SignalingServer::onWorkerResult(const QString& targetClient, const QString& message)
 {
-    if (!_sessions.contains(targetClinet) || _sessions[targetClinet] == nullptr) {
-        qWarning() << targetClinet << " has already offlined";
+    if (!_sessions.contains(targetClient) || _sessions[targetClient] == nullptr) {
+        qWarning() << targetClient << " has already offlined";
         return;
     }
-    auto session = _sessions[targetClinet];
+    auto session = _sessions[targetClient];
     session->sendData(message);
 }
 
@@ -318,7 +318,7 @@ void SignalingServer::onRemoveSession(const QString& clientId)
     if (_sessions.contains(clientId)) {
         _sessions.remove(clientId);
     }
-    _session_list = getPeertList();
+    _session_list = getPeerList();
 }
 
 // ClientSession >>>>>>>>>>>>>>>>>
