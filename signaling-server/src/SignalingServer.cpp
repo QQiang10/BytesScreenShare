@@ -30,7 +30,7 @@ bool SignalingServer::start(const QHostAddress& address, quint16 port)
         INFO() << "Signaling Server is running! Listen on: " << address.toString() << ":" << port;
         _hostAddress = address;
         _port = port;
-        _server->listen(_hostAddress, port);
+        _server->listen(_hostAddress, _port);
         _isRunning = true;
         return true;
     }
