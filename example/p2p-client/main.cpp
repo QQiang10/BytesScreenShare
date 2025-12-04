@@ -71,7 +71,7 @@ private:
         // 服务器连接区
         QHBoxLayout* h1 = new QHBoxLayout();
         serverAddr = new QLineEdit("ws://127.0.0.1:11290", this);
-        btnConnect = new QPushButton("连接信令服务器", this);
+        btnConnect = new QPushButton("Connect to signaling server", this);
         h1->addWidget(new QLabel("Server:"));
         h1->addWidget(serverAddr);
         h1->addWidget(btnConnect);
@@ -80,15 +80,15 @@ private:
         // P2P 操作区
         QHBoxLayout* h2 = new QHBoxLayout();
         peerList = new QComboBox(this);
-        btnStartP2P = new QPushButton("发起 Offer (Start P2P)", this);
+        btnStartP2P = new QPushButton("Send Offer (Start P2P)", this);
         btnStartP2P->setEnabled(false);
-        h2->addWidget(new QLabel("在线 Peer:"));
+        h2->addWidget(new QLabel("Online Peers:"));
         h2->addWidget(peerList, 1);
         h2->addWidget(btnStartP2P);
         layout->addLayout(h2);
 
         // DataChannel 测试区
-        btnSendMessage = new QPushButton("发送 DataChannel 消息", this);
+        btnSendMessage = new QPushButton("Send DataChannel Message", this);
         btnSendMessage->setEnabled(false);
         layout->addWidget(btnSendMessage);
 
