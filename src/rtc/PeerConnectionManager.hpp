@@ -32,19 +32,22 @@ signals:
     void disconnected();
     void errorOccurred(const QString& msg);
     void messageReceived(const QString& msg); 
+    void dataChannelOpened();
 
 public:
     void onConnectServer(const QString& url);
     void onSignalingMessage(const QJsonObject& obj);
     void onJoined(const QString& peerId);
+    void sendEncodedFrame(const QByteArray& data, uint32_t timestamp);
 
 private:
     void handleSignalingMessage(const QJsonObject& json);
     void sendSignalingMessage(const QString& type, const QString& to, const QJsonObject& data);
-
+    void sendtest();
     void createPeerConnection();
     void setupDataChannel();
     void bindDataChannel(std::shared_ptr<rtc::DataChannel> dc);
+
     
     
 private:
