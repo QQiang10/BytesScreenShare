@@ -1,5 +1,7 @@
 # Build output
 build/
+#third_party
+third_part/
 
 # Qt generated folders
 *.qrc.dep
