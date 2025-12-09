@@ -1,4 +1,4 @@
-#include "VideoEncoder.h"
+ï»¿#include "VideoEncoder.h"
 #include <QDebug>
 #include <libavutil/frame.h>
 
@@ -14,25 +14,25 @@ bool VideoEncoder::init(int width, int height, int fps, int bitrate) {
     m_targetW = width;
     m_targetH = height;
 
-    // 1. ²éÕÒ H.264 ±àÂëÆ÷
+    // 1. Find H.264 encoder
     const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_H264);
     if (!codec) {
-        qDebug() << "H.264 Encoder not found!";
+        FATAL() << "H.264 Encoder not found!";
         return false;
     }
 
-    // 2. ÅäÖÃÉÏÏÂÎÄ
+    // 2. Allocate codec context
     m_codecCtx = avcodec_alloc_context3(codec);
     m_codecCtx->bit_rate = bitrate;
     m_codecCtx->width = width;
     m_codecCtx->height = height;
     m_codecCtx->time_base = { 1, fps };
     m_codecCtx->framerate = { fps, 1 };
-    m_codecCtx->gop_size = 10; // ¹Ø¼üÖ¡¼ä¸ô
-    m_codecCtx->max_b_frames = 0; // ÊµÊ±Á÷½¨Òé 0 BÖ¡£¬½µµÍÑÓ³Ù
-    m_codecCtx->pix_fmt = AV_PIX_FMT_YUV420P; // H.264 ±ê×¼ÊäÈë¸ñÊ½
+    m_codecCtx->gop_size = 10; // keyframe interval
+    m_codecCtx->max_b_frames = 0; // realtime: no B-frames
+    m_codecCtx->pix_fmt = AV_PIX_FMT_YUV420P; // standard format
 
-    // 3. ´ò¿ª±àÂëÆ÷ (preset=ultrafast ÎþÉüÑ¹ËõÂÊ»»È¡ËÙ¶È)
+    // 3. Open encoder (ultrafast + zerolatency)
     AVDictionary* opts = nullptr;
     av_dict_set(&opts, "preset", "ultrafast", 0);
     av_dict_set(&opts, "tune", "zerolatency", 0);
@@ -44,7 +44,7 @@ bool VideoEncoder::init(int width, int height, int fps, int bitrate) {
         return false;
     }
 
-    // 4. ·ÖÅä YUV Ö¡ÄÚ´æ
+    // 4. Allocate YUV frame buffers
     m_frameYUV = av_frame_alloc();
     m_frameYUV->format = m_codecCtx->pix_fmt;
     m_frameYUV->width = m_codecCtx->width;
@@ -57,45 +57,45 @@ bool VideoEncoder::init(int width, int height, int fps, int bitrate) {
 void VideoEncoder::encode(const QVideoFrame& inputFrame) {
     if (!m_codecCtx) return;
 
-    // A. Ó³Éä Qt Ö¡µ½ÄÚ´æ
+    // A. Map Qt frame memory
     QVideoFrame cloneFrame = inputFrame;
     if (!cloneFrame.map(QVideoFrame::ReadOnly)) {
-        qDebug() << "Map frame failed";
+        FATAL() << "Map frame failed";
         return;
     }
 
-    // B. ·Ö±æÂÊ/¸ñÊ½×ª»» (SWS Scale)
-    // ¼´Ê¹ÊäÈëÊÇ 2K/4K£¬¶¼»á±»ÕâÀïÇ¿ÐÐËõ·Åµ½ 1920x1080 YUV420P
+    // B. Resolution/format conversion (SWS scale)
+    // Downscale higher resolutions to 1920x1080 YUV420P
     if (!m_swsCtx || cloneFrame.width() != m_lastSrcW ||
         cloneFrame.height() != m_lastSrcH) {
         qDebug() << "Source resolution changed to" << cloneFrame.width() << "x" << cloneFrame.height() << "- Recreating SwsContext";
 
-        // Èç¹û¾ÉµÄ´æÔÚ£¬ÏÈÊÍ·Å
+        // Free previous context if existed
         if (m_swsCtx) {
             sws_freeContext(m_swsCtx);
             m_swsCtx = nullptr;
         }
 
-        // ¸üÐÂ¼ÇÂ¼
+        // Record new source resolution
         m_lastSrcW = cloneFrame.width();
         m_lastSrcH = cloneFrame.height();
 
         
-        // ÕâÀï¼ò»¯¼ÙÉèÊäÈëÊÇ RGB32 (AV_PIX_FMT_BGRA »ò RGBA)
+        // Create scaling context: source BGRA to target YUV420P
         m_swsCtx = sws_getContext(
-            cloneFrame.width(), cloneFrame.height(), AV_PIX_FMT_BGRA, // ÊäÈë
-            m_targetW, m_targetH, AV_PIX_FMT_YUV420P,               // Êä³ö
+            cloneFrame.width(), cloneFrame.height(), AV_PIX_FMT_BGRA, // ï¿½ï¿½ï¿½ï¿½
+            m_targetW, m_targetH, AV_PIX_FMT_YUV420P,               // ï¿½ï¿½ï¿½
             SWS_BICUBIC, nullptr, nullptr, nullptr
         );
     }
 
-    // °²È«¼ì²é£ºÈç¹ûÉÏÏÂÎÄ´´½¨Ê§°Ü£¬²»Òª¼ÌÐø£¬·ñÔò sws_scale »á±ÀÀ£
+    // Bail out if SWS context creation failed
     if (!m_swsCtx) {
         cloneFrame.unmap();
         return;
     }
 
-    // Ö´ÐÐ×ª»»
+    // Perform scaling
     const uint8_t* srcData[4] = { cloneFrame.bits(0) };
     int srcLinesize[4] = { cloneFrame.bytesPerLine(0) };
 
@@ -104,11 +104,11 @@ void VideoEncoder::encode(const QVideoFrame& inputFrame) {
 
     cloneFrame.unmap();
 
-    // C. ·¢ËÍ¸ø±àÂëÆ÷
-    m_frameYUV->pts = m_frameCount++; // ÉèÖÃÊ±¼ä´Á
+    // C. Send frame to encoder
+    m_frameYUV->pts = m_frameCount++; // simple PTS counter
     int ret = avcodec_send_frame(m_codecCtx, m_frameYUV);
 
-    // D. ½ÓÊÕ±àÂëºóµÄ°ü
+    // D. Receive encoded packets
     while (ret >= 0) {
         ret = avcodec_receive_packet(m_codecCtx, m_pkt);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
@@ -118,19 +118,16 @@ void VideoEncoder::encode(const QVideoFrame& inputFrame) {
             uint8_t* data = m_pkt->data;
             int size = m_pkt->size;
 
-            // ½âÎö Annex-B ¸ñÊ½£¬ÌáÈ¡ NALU
-            // ÎÒÃÇÐèÒªÕÒµ½ 00 00 01 »ò 00 00 00 01 ·Ö¸ô·û
+            // Parse Annex-B NAL units separated by 00 00 01 or 00 00 00 01
             int curPos = 0;
             while (curPos < size) {
-                // Ñ°ÕÒ start code
+                // Find start code
                 int nalStart = -1;
                 int prefixLen = 0;
 
-                // ¼òµ¥µÄ start code ²éÕÒÂß¼­
-                // ×¢Òâ£ºÕâÀï¼ÙÉè FFmpeg Êä³öÊÇ±ê×¼µÄ Annex-B
-                // Êµ¼ÊÉÏ avcodec_receive_packet ³öÀ´µÄÍ¨³£¿ªÍ·¾ÍÊÇ Start Code
+                // Simple start code detection; FFmpeg outputs Annex-B with start codes
 
-                // Èç¹ûÕâÊÇ°üµÄ¿ªÊ¼£¬Í¨³£Ö±½Ó¾ÍÊÇ Start Code
+                // Directly check current position for start code
                 if (curPos + 4 <= size && data[curPos] == 0 && data[curPos + 1] == 0 && data[curPos + 2] == 0 && data[curPos + 3] == 1) {
                     nalStart = curPos + 4;
                     prefixLen = 4;
@@ -141,16 +138,16 @@ void VideoEncoder::encode(const QVideoFrame& inputFrame) {
                 }
 
                 if (nalStart == -1) {
-                    // ÕÒ²»µ½ start code£¬¿ÉÄÜÕâ±¾Éí¾ÍÊÇÂãÊý¾Ý£¨²»Ì«¿ÉÄÜ£©£¬»òÕß½âÎö½áÊø
+                    // No start code found; break to avoid infinite loop
                     break;
                 }
 
-                // Ñ°ÕÒÏÂÒ»¸ö start code À´È·¶¨µ±Ç° NALU ½áÊøÎ»ÖÃ
-                int nextNalStart = size; // Ä¬ÈÏÎª°üÎ²
+                // Find next start code to get current NAL size
+                int nextNalStart = size; // default to end
                 for (int i = nalStart; i < size - 3; ++i) {
                     if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1) {
                         nextNalStart = i; // 00 00 01
-                        // Èç¹ûÇ°Ãæ»¹ÓÐ¸ö 0£¬ÄÇ¾ÍÊÇ 00 00 00 01£¬»ØÍËÒ»Î»
+                        // If preceding byte is 0, treat as 00 00 00 01
                         if (i > 0 && data[i - 1] == 0) nextNalStart = i - 1;
                         break;
                     }
@@ -160,20 +157,16 @@ void VideoEncoder::encode(const QVideoFrame& inputFrame) {
                 if (nalSize > 0) {
                     std::vector<uint8_t> nalBuffer(data + nalStart, data + nalStart + nalSize);
 
-                    // ¼ÆËã PTS (Presentation Time Stamp) ¶ÔÓ¦µÄ 90kHz Ê±¼ä´Á
-                    // ffmpeg µÄ pts Í¨³£»ùÓÚ time_base (ÎÒÃÇÉèµÄÊÇ 1/30)
-                    // RTP ÐèÒª 90000Hz¡£
+                    // Convert PTS to 90 kHz RTP timestamp
                     
                     uint32_t rtpTimestamp = 0;
                     if (m_pkt->pts != AV_NOPTS_VALUE) {
-                        // ¼ò»¯¼ÆËã£ºÒòÎªÎÒÃÇÉèÖÃ time_base = {1, fps}
-                        // ËùÒÔ pts ¾ÍÊÇÖ¡Êý 0, 1, 2...
-                        // 90kHz ÏÂÃ¿Ö¡¼ä¸ô = 90000 / fps
-                        // ¼ÙÉè fps=30 -> 3000
+                        // time_base = {1, fps}, so pts is frame index
+                        // 90kHz ticks per frame = 90000 / fps (e.g., fps=30 -> 3000)
                         rtpTimestamp = static_cast<uint32_t>(m_pkt->pts * (90000 / 30));
                     }
 
-                    // »Øµ÷³öÈ¥£ºÂã NALU Êý¾Ý + Ê±¼ä´Á
+                    // Callback with NAL data and timestamp
                     onEncodedData(nalBuffer, rtpTimestamp);
                 }
 
@@ -189,9 +182,9 @@ void VideoEncoder::cleanup() {
         avcodec_free_context(&m_codecCtx);
         m_codecCtx = nullptr;
     }
-    // ÕýÈ·µÄÊÍ·ÅÖ¡ÄÚ´æ·½Ê½
+    // Release buffers correctly
     if (m_frameYUV) {
-        av_frame_free(&m_frameYUV); // ´«Èë¶þ¼¶Ö¸Õë
+        av_frame_free(&m_frameYUV);
         m_frameYUV = nullptr;
     }
     if (m_swsCtx) {

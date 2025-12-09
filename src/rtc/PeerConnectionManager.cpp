@@ -34,7 +34,7 @@ void PeerConnectionManager::createPeerConnection()
     m_pc->onStateChange([this](rtc::PeerConnection::State state) {
         QMetaObject::invokeMethod(this, [this, state]() {
             if (state == rtc::PeerConnection::State::Connected) {
-                qDebug() << "P2P handshaking successfully!";
+                INFO() << "P2P handshaking successfully!";
             }
             else if (state == rtc::PeerConnection::State::Disconnected ||
                 state == rtc::PeerConnection::State::Failed) {
@@ -89,11 +89,10 @@ void PeerConnectionManager::bindDataChannel(std::shared_ptr<rtc::DataChannel> dc
     m_videoChannel = dc;
 
     m_videoChannel->onOpen([this]() {
-        qDebug("datachannel open successfully!");
-        if(m_isCaller) sendtest();    
+        INFO() << "datachannel open successfully!";
+        // if(m_isCaller) sendtest();    
         QMetaObject::invokeMethod(this, [this]() {
-            emit p2pConnected();
-            if(m_isCaller) emit dataChannelOpened();
+            emit dataChannelOpened(m_isCaller);
             });
         });
 
@@ -103,7 +102,6 @@ void PeerConnectionManager::bindDataChannel(std::shared_ptr<rtc::DataChannel> dc
             auto &str = std::get<rtc::string>(data);
             qDebug() << "Callee received text:" << QString::fromStdString(str);
 
-            // 比如这里你可�? emit 信号，通知 UI 显示消息
             return;
         }
 
@@ -209,6 +207,7 @@ void PeerConnectionManager::onConnectServer(const QString& url)
         });
 
     QObject::connect(this, &PeerConnectionManager::peerJoined, this, &PeerConnectionManager::onJoined);
+    QObject::connect(this, &PeerConnectionManager::peersList, this, &PeerConnectionManager::onList);
     m_ws->open(url.toStdString());
 }
 
@@ -241,6 +240,12 @@ void PeerConnectionManager::onJoined(const QString& peerId)
     m_targetPeerId = peerId;
 }
 
+void PeerConnectionManager::onList(const QJsonArray& list)
+{
+    if(list.size() > 0)
+        m_targetPeerId = list[0].toString();
+}
+
 
 void PeerConnectionManager::registerClient()
 {
@@ -254,34 +259,26 @@ void PeerConnectionManager::sendtest(){
     }
 }
 
-void PeerConnectionManager::sendEncodedFrame(const QByteArray& data, uint32_t timestamp)
+void PeerConnectionManager::sendEncodedVideoFrame(const QByteArray& encodedData)
 {
     // 仅通过数据通道发送视频帧
     if (m_videoChannel && m_videoChannel->isOpen()) {
-        // 转换�? libdatachannel 需要的 std::byte 格式
-        // 注意：DataChannel 默认 MTU 限制（通常 64KB - 头部）�?
-        // 如果你的图片很大（例�? 4K 截图），这里会失败，需要分片�?
-        // 但对�? 1080p 的中等质�? JPEG (通常 < 100KB)，这可能勉强能行，建议分片�?
-        // *简单方�?*：控�? JPEG 质量，确保每帧小�? 64KB�?
+        // 转换为 libdatachannel 需要的 std::byte 格式
+        // 注意：DataChannel 默认 MTU 限制（通常 64KB - 头部）。
+        // 如果你的图片很大（例如 4K 截图），这里会失败，需要分片。
+        // 但对于 1080p 的中等质量 JPEG (通常 < 100KB)，这可能勉强能行，建议分片。
+        // *简单方案*：控制 JPEG 质量，确保每帧小于 64KB。
 
         try {
-            std::vector<std::byte> binData(data.size());
-            std::memcpy(binData.data(), data.constData(), data.size());
+            std::vector<std::byte> binData(encodedData.size());
+            std::memcpy(binData.data(), encodedData.data(), encodedData.size());
 
-            QByteArray byteArray(reinterpret_cast<const char*>(binData.data()), binData.size());
-            // 显示十六进制
-            qDebug() << "original binData :" << byteArray.toHex(' ');
-
-
-            qDebug("video data send!");
-            m_videoChannel->send(binData); // 时间戳没有send出去
+            m_videoChannel->send(binData);
+            DEBUG() << "Send a video frame.";
         }
         catch (...) {
-            qDebug() << "Send frame failed. Channel might be busy or closed.";
+            DEBUG() << "Send frame failed. Channel might be busy or closed.";
         }
-    }else {
-        // 如果 DataChannel 还没打开或已关闭，则丢弃数据
-        qDebug() << "DataChannel not open. Dropping encoded frame.";
     }
 }
 

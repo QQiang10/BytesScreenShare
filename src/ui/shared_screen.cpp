@@ -297,11 +297,6 @@ shared_screen::shared_screen(QWidget *parent)
     connect(btnRecord, &QPushButton::clicked, this, &shared_screen::on_btnRecordClicked);
     connect(btnRaiseHand, &QPushButton::clicked, this, &shared_screen::on_btnRaiseHandClicked);
     connect(btnLeave, &QPushButton::clicked, this, &shared_screen::on_btnLeaveClicked);
-    connect(pcMgr, &PeerConnectionManager::dataChannelOpened,
-            // 绑定到 ScreenCaptureService 的 startCapture 槽函数
-            CaptureService, &ScreenCaptureService::startCapture);
-    connect(CaptureService, &ScreenCaptureService::encodedFrameReady,
-            pcMgr, &PeerConnectionManager::sendEncodedFrame);
             
     if (ui->btnSend)
         connect(ui->btnSend, &QPushButton::clicked, this, &shared_screen::on_btnSendClicked);
@@ -417,6 +412,10 @@ void shared_screen::on_btnJoinMeetingClicked()
     QObject::connect(pcMgr, &PeerConnectionManager::peersList, this, &shared_screen::updateList);
     QObject::connect(pcMgr, &PeerConnectionManager::peerJoined, this, &shared_screen::onJoined);
 
+    connect(pcMgr, &PeerConnectionManager::dataChannelOpened,
+        CaptureService, &ScreenCaptureService::onDCOpened);
+    auto worker = CaptureService->getWorker();
+    QObject::connect(worker, &VideoWorker::rtpPacketReady, pcMgr, &PeerConnectionManager::sendEncodedVideoFrame);
     pcMgr->onConnectServer(url);
 }
 
@@ -467,7 +466,6 @@ void shared_screen::on_btnVoiceClicked()
 // 共享屏幕按钮，点击建立p2p
 void shared_screen::on_btnShareScreenClicked()
 {
-
     if(!isScreenSharing){
         // startP2P();
         QString targetId = pcMgr->target();

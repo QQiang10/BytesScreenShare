@@ -1,9 +1,10 @@
-#pragma once
+ï»¿#pragma once
 #include <QObject>
 #include <QVideoFrame>
 #include <functional>
+#include <signaling-server/src/Common.hpp>
 
-// FFmpeg ÊÇ C ÓïÑÔ¿â
+// FFmpeg in C headers
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -18,28 +19,28 @@ public:
     explicit VideoEncoder(QObject* parent = nullptr);
     ~VideoEncoder();
 
-    // ³õÊ¼»¯±àÂëÆ÷ (±àÂëÄ¿±êÎª 1080p£¬ ÔÚScreenCaptureÖĞĞ´ÁË)
+    // Initialize encoder (default target 1080p; ScreenCapture can override)
     bool init(int width, int height, int fps, int bitrate);
 
-    // ±àÂëÒ»Ö¡ Qt µÄ»­Ãæ
+    // Encode one Qt frame
     void encode(const QVideoFrame& frame);
 
-    // »Øµ÷º¯Êı£º±àÂëºÃµÄ H.264 Êı¾İÍ¨¹ıÕâÀï´«³öÈ¥
+    // Callback to deliver encoded H.264 payload
     std::function<void(const std::vector<uint8_t>&, uint32_t)> onEncodedData;
 
 private:
-    // ×ÊÔ´ÊÍ·Å
+    // Cleanup resources
     void cleanup();
 
     AVCodecContext* m_codecCtx = nullptr;
-    AVFrame* m_frameYUV = nullptr;     // ´æ·Å×ª»»ºóµÄ YUV Êı¾İ
-    SwsContext* m_swsCtx = nullptr;    // ÓÃÓÚÍ¼ÏñËõ·ÅºÍ¸ñÊ½×ª»»
+    AVFrame* m_frameYUV = nullptr;     // converted YUV frame buffer
+    SwsContext* m_swsCtx = nullptr;    // scaling and format conversion context
     AVPacket* m_pkt = nullptr;
 
-    int m_targetW = 1920; // Í³Ò»Îª1080pµÄ·Ö±æÂÊ£¬¼õÉÙÍøÂçÑ¹Á¦ºÍÑÓÊ±
+    int m_targetW = 1920; // target resolution defaults to 1080p
     int m_targetH = 1080;
     int m_frameCount = 0;
 
-    int m_lastSrcW = -1;// ¼ÇÂ¼ÉÏÒ»´ÎÊäÈëµÄÔ´·Ö±æÂÊ£¬ÓÃÓÚ¼ì²â±ä»¯
+    int m_lastSrcW = -1; // track last source resolution to detect changes
     int m_lastSrcH = -1;
 };

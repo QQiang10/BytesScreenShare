@@ -5,49 +5,91 @@
 #include <QMediaCaptureSession>
 #include <QScreenCapture>
 #include <QVideoWidget>
+#include <QByteArray>
+#include <QByteArrayView>
 #include <memory>  // for std::unique_ptr
-#include "../encoder/VideoEncoder.h"
-// #include "../network/RtcRtpSender.h" 
 
+#include "signaling-server/src/Common.hpp"
+class VideoEncoder;
 class RtcRtpSender;
 
-// 继承 QObject 是为了能使用信号槽机制
+
+class VideoWorker : public QObject
+{
+    Q_OBJECT
+public:
+    explicit VideoWorker(QObject* parent = nullptr);
+    ~VideoWorker();
+
+public slots:
+    // Process one video frame (queued)
+    void processFrame(const QVideoFrame& frame);
+
+public:
+    // Initialize resources (runs in worker thread)
+    // Creates encoder and RTP sender within the worker thread
+    void initResources();
+
+    void cleanup();
+
+    void onPacketReady(const QByteArray& packetData);
+
+signals:
+    // Signal: frame finished so the producer thread can send next one
+    void frameProcessingFinished();
+
+    // Signal: RTP packet ready, delivered via queued connection to consumer
+    void rtpPacketReady(const QByteArray& packetData);
+
+private:
+    // Owned pointers (worker thread)
+    VideoEncoder* m_encoder;
+    RtcRtpSender* m_rtpSender;
+};
+
+// QObject subclass to use signals/slots
 class ScreenCaptureService : public QObject
 {
-    Q_OBJECT // Qt 宏
+    Q_OBJECT // Qt 锟斤拷
 
 public:
     explicit ScreenCaptureService(QObject* parent = nullptr);
     ~ScreenCaptureService();
 
-    // 供 UI 调用的接口
+    // UI-facing controls
     void startCapture();
     void stopCapture();
-    void initEncoder(const QString& targetIp);  // 初始化编码器和 WebRTC 发送端
 
-    // WebRTC 信令：设置对端返回的 SDP Answer
-    /*bool setRemoteSdp(const QString& answerSdp);*/
-
-    // UI窗口指针
+    // UI embed handle
     QVideoWidget* getVideoPreviewWidget();
 
+    VideoWorker* getWorker();
+
+public:
+    void onDCOpened(bool isCaller);
+    void onFrameCaptured();
+    void onWorkerFinished();
 signals:
-    // 告诉外界：捕获状态变了 (可选)
+    // Optional: notify capture state changes
     void captureStateChanged(bool isRunning);
 
     void videoDataReady(const std::vector<uint8_t>& data);
     void encodedFrameReady(const QByteArray& encodedData, uint32_t timestamp);
+    void packetReady(const QByteArray& packet);
 
 private:
     void init();
 
     QMediaCaptureSession* m_session = nullptr;
     QScreenCapture* m_screenCapture = nullptr;
-    QVideoWidget* m_previewWidget = nullptr; // 这是一个用来预览的小窗口
-    QVideoSink* m_videoSink = nullptr; // 用于提取帧
-    VideoEncoder* m_encoder = nullptr; // 用于压缩帧
+    QVideoWidget* m_previewWidget = nullptr; // preview window
+    QVideoSink* m_videoSink = nullptr; // sink to read frames
 
-    // WebRTC RTP 发送器
-    // 使用智能指针 (unique_ptr) 管理内存，避免手动 delete
+    QThread* m_thread;
+    VideoWorker* m_worker;
+
+    bool isBusy;
+
+    // WebRTC RTP sender placeholder
     // std::unique_ptr<RtcRtpSender> m_rtcSender;
 };
