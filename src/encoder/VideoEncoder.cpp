@@ -47,7 +47,7 @@ bool VideoEncoder::init(int width, int height, int fps, int bitrate) {
 
     // 在 VideoEncoder::init() 中，打开编码器后立即添加：
     if (m_codecCtx->extradata && m_codecCtx->extradata_size > 0) {
-        DEBUG() << "Encoder extradata size:" << m_codecCtx->extradata_size;
+        // DEBUG() << "Encoder extradata size:" << m_codecCtx->extradata_size;
         // 这里面就有 SPS+PPS，可以在第一帧时主动发送
     }
 
@@ -177,10 +177,6 @@ void VideoEncoder::encode(const QVideoFrame& inputFrame) {
                 }
 
                 int nalType = data[nalStart] & 0x1F;
-                DEBUG() << "NAL type:" << nalType << "size:" << nalSize;
-                if (nalType == 7) DEBUG() << "  -> SPS";
-                if (nalType == 8) DEBUG() << "  -> PPS";
-                if (nalType == 5) DEBUG() << "  -> IDR";
                 curPos = nextNalStart;
             }
         }

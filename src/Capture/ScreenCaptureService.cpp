@@ -8,12 +8,13 @@
 #include <QScreen>
 #include <QDebug>
 #include <QThread>
+#include <QImage>
+#include <QPixmap>
 
 ScreenCaptureService::ScreenCaptureService(QObject* parent)
     : QObject(parent)
     , m_session(nullptr)
     , m_screenCapture(nullptr)
-    , m_previewWidget(nullptr)
     , m_videoSink(nullptr)
     , m_thread(nullptr)
     , m_worker(nullptr)
@@ -55,24 +56,22 @@ void ScreenCaptureService::init(bool isCaller)
         // 1. Create capture objects
         m_session = new QMediaCaptureSession(this);
         m_screenCapture = new QScreenCapture(this);
-        m_previewWidget = new QVideoWidget(); // embed into UI when needed
 
-        // 2. Wire pipeline
-        m_session->setScreenCapture(m_screenCapture);
-        m_session->setVideoOutput(m_previewWidget);
-
-        // 3. Default to primary screen
-        m_screenCapture->setScreen(QGuiApplication::primaryScreen());
-
-
+        // 2. Create single video sink (QMediaCaptureSession supports only ONE output)
         m_videoSink = new QVideoSink(this);
+        
+        // 3. Wire pipeline - use ONLY QVideoSink as output
+        m_session->setScreenCapture(m_screenCapture);
         m_session->setVideoSink(m_videoSink);
-        // for test
-        // m_session->setVideoOutput(m_videoSink); // would pop up a window
-
-        // Connect to receive frames on each screen refresh
+        
+        // 4. Default to primary screen
+        m_screenCapture->setScreen(QGuiApplication::primaryScreen());
+        
+        // 5. Connect videoFrameChanged for encoding only (preview handled in UI)
         connect(m_videoSink, &QVideoSink::videoFrameChanged,
-            this, &ScreenCaptureService::onFrameCaptured);
+                this, &ScreenCaptureService::onFrameCaptured, Qt::DirectConnection);
+        
+        INFO() << "Capture pipeline initialized (sink for encoding, preview via UI)";
     }
     else { // Initialize the resources of the screen rendering module
         m_renderThread = new QThread(this);
@@ -97,6 +96,9 @@ void ScreenCaptureService::startCapture()
     if (m_screenCapture) {
         m_screenCapture->start();
         INFO() << "Screen Capture Started!";
+        
+        // Polling thread already started in init(); just mark capturing state
+        m_isCapturing = true;
         emit captureStateChanged(true);
     }
 }
@@ -104,15 +106,19 @@ void ScreenCaptureService::startCapture()
 void ScreenCaptureService::stopCapture()
 {
     if (m_screenCapture) {
+        m_isCapturing = false;
         m_screenCapture->stop();
         INFO() << "Screen Capture Stopped!";
+        
+        INFO() << "Capture stats - Total frames:" << m_frameCount
+               << "Dropped (busy):" << m_dropCount;
         emit captureStateChanged(false);
     }
 }
 
-QVideoWidget* ScreenCaptureService::getVideoPreviewWidget()
+QVideoSink* ScreenCaptureService::getVideoSink()
 {
-    return m_previewWidget;
+    return m_videoSink;
 }
 
 VideoOpenGLWidget* ScreenCaptureService::getRenderWidget()
@@ -146,16 +152,22 @@ void ScreenCaptureService::startRender()
 
 void ScreenCaptureService::onFrameCaptured()
 {
-    if (isBusy) return; // drop frame if worker busy to keep realtime
-
-    // Grab current frame
+    // Grab current frame from sink (polled, not signal-driven)
     QVideoFrame frame = m_videoSink->videoFrame();
     if (!frame.isValid()) return;
 
-    // Mark busy
+    ++m_frameCount;
+
+    // Skip if worker is busy (encoder still processing previous frame)
+    if (isBusy) {
+        ++m_dropCount;
+        return;
+    }
+
+    // Mark busy and queue for encoding
     isBusy = true;
 
-    // Queue to worker thread using queued connection; QVideoFrame is thread-safe when mapped once
+    // Queue to worker thread using queued connection
     QMetaObject::invokeMethod(m_worker, "processFrame", Qt::QueuedConnection, Q_ARG(QVideoFrame, frame));
 }
 
@@ -199,7 +211,7 @@ void VideoWorker::initResources()
 
 void VideoWorker::processFrame(const QVideoFrame& frame)
 {
-    // Encode frame in worker thread
+    // Encode frame in worker thread    
     if (m_encoder) m_encoder->encode(frame);
 
     // Notify controller so producer can send next frame
@@ -254,7 +266,7 @@ void RenderWorker::onEncodedPacket(const QByteArray& packetData)
         if (total == 0) { m_pendingNals.clear(); m_hasFrame=false; m_pendingHasIDR=false; return; }
         std::vector<std::byte> buffer(total);
         size_t off=0; for (auto& n: m_pendingNals){ memcpy(buffer.data()+off, n.data(), n.size()); off+=n.size(); }
-        DEBUG() << "Flush frame ts:" << m_currentTimestamp << "NAL count:" << m_pendingNals.size() << "total:" << total;
+        // DEBUG() << "Flush frame ts:" << m_currentTimestamp << "NAL count:" << m_pendingNals.size() << "total:" << total;
         m_receiver->onTrackData(buffer);
         m_pendingNals.clear();
         m_pendingHasIDR=false;
@@ -286,7 +298,7 @@ void RenderWorker::onEncodedPacket(const QByteArray& packetData)
 
     uint8_t nalType = payload[0] & 0x1F;
 
-    DEBUG() << "TS:" << ts << "seq:" << seq << "NAL type:" << int(nalType) << "payload:" << payloadSize;
+    // DEBUG() << "TS:" << ts << "seq:" << seq << "NAL type:" << int(nalType) << "payload:" << payloadSize;
     std::vector<uint8_t> annexb;
 
     if (nalType >= 1 && nalType <= 23) {
@@ -294,8 +306,8 @@ void RenderWorker::onEncodedPacket(const QByteArray& packetData)
         annexb.insert(annexb.end(), {0,0,0,1});
         annexb.insert(annexb.end(), payload, payload + payloadSize);
 
-        if (nalType == 7) { m_sps.assign(payload, payload + payloadSize); DEBUG() << "Cached SPS size:" << m_sps.size(); }
-        else if (nalType == 8) { m_pps.assign(payload, payload + payloadSize); DEBUG() << "Cached PPS size:" << m_pps.size(); }
+        if (nalType == 7) { m_sps.assign(payload, payload + payloadSize); }// DEBUG() << "Cached SPS size:" << m_sps.size(); }
+        else if (nalType == 8) { m_pps.assign(payload, payload + payloadSize); }// DEBUG() << "Cached PPS size:" << m_pps.size(); }
         else if (nalType == 5) { m_pendingHasIDR = true; }
     }
     else if (nalType == 28 && payloadSize >= 2) { // FU-A

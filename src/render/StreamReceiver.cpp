@@ -138,17 +138,6 @@ void StreamReceiver::onTrackData(const std::vector<std::byte>& data) {
     const uint8_t* rawData = reinterpret_cast<const uint8_t*>(data.data());
     int rawSize = static_cast<int>(data.size());
 
-    DEBUG() << "onTrackData: received" << rawSize << "bytes";
-    
-    // 打印前4字节用于调试
-    if (rawSize >= 4) {
-        DEBUG() << "  Header (hex): " 
-            << QString("%1").arg(rawData[0], 2, 16, QChar('0')) << " "
-            << QString("%1").arg(rawData[1], 2, 16, QChar('0')) << " "
-            << QString("%1").arg(rawData[2], 2, 16, QChar('0')) << " "
-            << QString("%1").arg(rawData[3], 2, 16, QChar('0'));
-    }
-
     // 直接用 Annex-B 数据创建 packet
     m_packet->data = (uint8_t*)rawData;
     m_packet->size = rawSize;
@@ -167,8 +156,6 @@ void StreamReceiver::onTrackData(const std::vector<std::byte>& data) {
     int frameCount = 0;
     while ((ret = avcodec_receive_frame(m_codecCtx, m_frame)) >= 0) {
         frameCount++;
-        DEBUG() << "Frame decoded:" << m_frame->width << "x" << m_frame->height 
-                << "format:" << m_frame->format;
         emit frameReady(
             m_frame->data[0], m_frame->data[1], m_frame->data[2],
             m_frame->linesize[0], m_frame->linesize[1], m_frame->linesize[2],

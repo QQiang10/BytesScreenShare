@@ -4,9 +4,9 @@
 #include <QVideoSink>
 #include <QMediaCaptureSession>
 #include <QScreenCapture>
-#include <QVideoWidget>
 #include <QByteArray>
 #include <QByteArrayView>
+#include <QTimer>
 #include <memory>  // for std::unique_ptr
 
 #include "signaling-server/src/Common.hpp"
@@ -93,8 +93,8 @@ public:
     void startCapture();
     void stopCapture();
 
-    // UI embed handle
-    QVideoWidget* getVideoPreviewWidget();
+    // Access to video sink for external preview rendering
+    QVideoSink* getVideoSink();
     VideoOpenGLWidget* getRenderWidget();
 
     VideoWorker* getVideoWorker();
@@ -121,12 +121,14 @@ private:
     // For Capture
     QMediaCaptureSession* m_session;
     QScreenCapture* m_screenCapture;
-    QVideoWidget* m_previewWidget; // preview window
-    QVideoSink* m_videoSink; // sink to read frames
+    QVideoSink* m_videoSink; // single sink for both preview and encoding
 
     QThread* m_thread;
     VideoWorker* m_worker;
     bool isBusy;
+    bool m_isCapturing = false;
+    quint64 m_frameCount = 0;
+    quint64 m_dropCount = 0;
 
     // For Render
     QThread* m_renderThread = nullptr;

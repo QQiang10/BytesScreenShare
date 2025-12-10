@@ -532,8 +532,14 @@ void shared_screen::onDataChannelOpened(bool isCaller)
 {
     // datachannel 建立后，初始化 CaptureService 已由 onDCOpened 完成
     if (isCaller) {
-        mountVideoWidget(CaptureService->getVideoPreviewWidget());
+        // Caller: connect video sink to UI label for preview
+        auto sink = CaptureService->getVideoSink();
+        if (sink) {
+            connect(sink, &QVideoSink::videoFrameChanged,
+                    this, &shared_screen::onPreviewFrame, Qt::QueuedConnection);
+        }
     } else {
+        // Callee: mount render widget
         mountVideoWidget(CaptureService->getRenderWidget());
     }
 }
@@ -599,6 +605,22 @@ void shared_screen::clearVideoWidget()
     }
     currentVideoWidget = nullptr;
     ui->screenPreview->setText(u8"屏幕预览区域\n点击共享屏幕开始");
+}
+
+void shared_screen::onPreviewFrame(const QVideoFrame &frame)
+{
+    if (!ui->screenPreview) return;
+    if (!frame.isValid()) return;
+
+    // Convert QVideoFrame to QImage
+    QVideoFrame copy = frame;
+    QImage img = copy.toImage();
+    if (img.isNull()) return;
+
+    // Convert to pixmap and scale to fit the label
+    QPixmap pm = QPixmap::fromImage(img);
+    QPixmap scaled = pm.scaled(ui->screenPreview->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->screenPreview->setPixmap(scaled);
 }
 
 // 点击摄像头按钮

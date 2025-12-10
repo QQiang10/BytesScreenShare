@@ -126,6 +126,7 @@ private slots:
     void onJoined(const QString& id);
     void onDataChannelOpened(bool isCaller);
     void onSourceReady();
+    void onPreviewFrame(const QVideoFrame &frame);
 
 private:
     // ===== 帮助函数 =====

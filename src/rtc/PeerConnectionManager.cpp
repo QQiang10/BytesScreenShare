@@ -263,18 +263,12 @@ void PeerConnectionManager::sendEncodedVideoFrame(const QByteArray& encodedData)
 {
     // 仅通过数据通道发送视频帧
     if (m_videoChannel && m_videoChannel->isOpen()) {
-        // 转换为 libdatachannel 需要的 std::byte 格式
-        // 注意：DataChannel 默认 MTU 限制（通常 64KB - 头部）。
-        // 如果你的图片很大（例如 4K 截图），这里会失败，需要分片。
-        // 但对于 1080p 的中等质量 JPEG (通常 < 100KB)，这可能勉强能行，建议分片。
-        // *简单方案*：控制 JPEG 质量，确保每帧小于 64KB。
-
         try {
             std::vector<std::byte> binData(encodedData.size());
             std::memcpy(binData.data(), encodedData.data(), encodedData.size());
 
             m_videoChannel->send(binData);
-            DEBUG() << "Send a video frame.";
+            // DEBUG() << "Send video frame size=" << encodedData.size() << "bytes";
         }
         catch (...) {
             DEBUG() << "Send frame failed. Channel might be busy or closed.";
