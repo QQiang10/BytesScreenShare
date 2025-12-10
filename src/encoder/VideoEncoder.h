@@ -40,6 +40,7 @@ private:
     int m_targetW = 1920; // target resolution defaults to 1080p
     int m_targetH = 1080;
     int m_frameCount = 0;
+    int m_fps = 30;
 
     int m_lastSrcW = -1; // track last source resolution to detect changes
     int m_lastSrcH = -1;

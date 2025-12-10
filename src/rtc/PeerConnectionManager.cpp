@@ -110,11 +110,11 @@ void PeerConnectionManager::bindDataChannel(std::shared_ptr<rtc::DataChannel> dc
 
             QByteArray qData(reinterpret_cast<const char*>(binData.data()), binData.size());
 
-            qDebug() << "received qData:" << qData.toHex(' ');
+            // qDebug() << "received qData:" << qData.toHex(' ');
 
-            // QMetaObject::invokeMethod(this, [this, qData]() {
-            //     emit encodedFrameReceived(qData);
-            //     });
+            QMetaObject::invokeMethod(this, [this, qData]() {
+                emit encodedFrameReceived(qData);
+                });
         }
         });
 }

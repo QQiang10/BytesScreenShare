@@ -26,7 +26,7 @@ signals:
     void peersList(const QJsonArray& list);
     void p2pConnected();     // datachannel has established
     void p2pDisconnected();
-    void encodedFrameReceived(QByteArray data);
+    void encodedFrameReceived(const QByteArray& data);
 
     void connected();
     void disconnected();

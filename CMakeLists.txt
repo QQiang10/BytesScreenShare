@@ -21,8 +21,12 @@ if(NOT DEFINED CMAKE_PREFIX_PATH)
     endif()
 endif()
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Multimedia MultimediaWidgets WebSockets Network)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Multimedia MultimediaWidgets WebSockets Network)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS
+    Core Widgets Multimedia MultimediaWidgets WebSockets Network OpenGLWidgets
+)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS
+    Core Widgets Multimedia MultimediaWidgets WebSockets Network OpenGLWidgets
+)
 
 # MSVC 编码与标准行为
 add_compile_options(
@@ -39,6 +43,9 @@ set(SRCS
     src/rtc/PeerConnectionManager.cpp
     src/encoder/VideoEncoder.cpp
     src/Capture/ScreenCaptureService.cpp
+    src/encoder/RtcRtpSender.cpp
+    src/render/StreamReceiver.cpp
+    src/render/VideoOpenGLWidget.cpp
 )
 
 set(HEADERS
@@ -47,6 +54,10 @@ set(HEADERS
     src/rtc/PeerConnectionManager.hpp
     src/encoder/VideoEncoder.h
     src/Capture/ScreenCaptureService.h
+    src/encoder/RtcRtpSender.h
+    src/render/StreamReceiver.h
+    src/render/VideoOpenGLWidget.h
+    signaling-server/src/Common.hpp
 )
 
 set(UIS
@@ -58,7 +69,7 @@ qt_wrap_ui(UI_HEADERS ${UIS})
 qt_add_resources(RESOURCES src/icons/icons.qrc)
 
 add_executable(${PROJECT_NAME}
-    # WIN32
+    #WIN32
     ${SRCS}
     ${HEADERS}
     ${UI_HEADERS}
@@ -73,6 +84,7 @@ target_link_libraries(${PROJECT_NAME}
         Qt${QT_VERSION_MAJOR}::MultimediaWidgets
         Qt${QT_VERSION_MAJOR}::WebSockets
         Qt${QT_VERSION_MAJOR}::Network
+        Qt${QT_VERSION_MAJOR}::OpenGLWidgets
 )
 
 # --------------------------------------

@@ -12,6 +12,8 @@
 #include "signaling-server/src/Common.hpp"
 class VideoEncoder;
 class RtcRtpSender;
+class StreamReceiver;
+class VideoOpenGLWidget;
 
 
 class VideoWorker : public QObject
@@ -47,6 +49,37 @@ private:
     RtcRtpSender* m_rtpSender;
 };
 
+// Render worker: runs in worker thread and feeds StreamReceiver
+class RenderWorker : public QObject {
+    Q_OBJECT
+public:
+    explicit RenderWorker(QObject* parent = nullptr);
+    ~RenderWorker();
+
+public slots:
+    void onEncodedPacket(const QByteArray& packetData);
+
+signals:
+    void frameReady(const uchar* y,const uchar* u,const uchar* v,int yStride,int uStride,int vStride,int width,int height);
+
+private:
+    StreamReceiver* m_receiver;
+    std::vector<uint8_t> m_sps;  // Cache SPS
+    std::vector<uint8_t> m_pps;  // Cache PPS
+    // 帧级组装状态
+    uint32_t m_currentTimestamp = 0;
+    bool m_hasFrame = false;
+    bool m_pendingHasIDR = false;
+    std::vector<std::vector<uint8_t>> m_pendingNals;
+    // FU-A 重组状态
+    struct FuState {
+        std::vector<uint8_t> buffer;
+        uint16_t expectedSeq = 0;
+        bool active = false;
+        uint8_t nalType = 0;
+    } m_fuState;
+};
+
 // QObject subclass to use signals/slots
 class ScreenCaptureService : public QObject
 {
@@ -62,13 +95,16 @@ public:
 
     // UI embed handle
     QVideoWidget* getVideoPreviewWidget();
+    VideoOpenGLWidget* getRenderWidget();
 
-    VideoWorker* getWorker();
+    VideoWorker* getVideoWorker();
+    RenderWorker* getRenderWorker();
 
 public:
     void onDCOpened(bool isCaller);
     void onFrameCaptured();
     void onWorkerFinished();
+    void startRender();
 signals:
     // Optional: notify capture state changes
     void captureStateChanged(bool isRunning);
@@ -76,19 +112,27 @@ signals:
     void videoDataReady(const std::vector<uint8_t>& data);
     void encodedFrameReady(const QByteArray& encodedData, uint32_t timestamp);
     void packetReady(const QByteArray& packet);
+    void resourceReady();
 
 private:
-    void init();
+    void init(bool isCaller);
 
-    QMediaCaptureSession* m_session = nullptr;
-    QScreenCapture* m_screenCapture = nullptr;
-    QVideoWidget* m_previewWidget = nullptr; // preview window
-    QVideoSink* m_videoSink = nullptr; // sink to read frames
+private:
+    // For Capture
+    QMediaCaptureSession* m_session;
+    QScreenCapture* m_screenCapture;
+    QVideoWidget* m_previewWidget; // preview window
+    QVideoSink* m_videoSink; // sink to read frames
 
     QThread* m_thread;
     VideoWorker* m_worker;
-
     bool isBusy;
+
+    // For Render
+    QThread* m_renderThread = nullptr;
+    RenderWorker* m_renderWorker = nullptr;
+    VideoOpenGLWidget* m_renderWidget = nullptr;
+    
 
     // WebRTC RTP sender placeholder
     // std::unique_ptr<RtcRtpSender> m_rtcSender;

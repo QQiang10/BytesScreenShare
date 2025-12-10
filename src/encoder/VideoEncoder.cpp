@@ -13,6 +13,7 @@ VideoEncoder::~VideoEncoder() {
 bool VideoEncoder::init(int width, int height, int fps, int bitrate) {
     m_targetW = width;
     m_targetH = height;
+    m_fps = fps > 0 ? fps : 30;
 
     // 1. Find H.264 encoder
     const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_H264);
@@ -37,11 +38,17 @@ bool VideoEncoder::init(int width, int height, int fps, int bitrate) {
     av_dict_set(&opts, "preset", "ultrafast", 0);
     av_dict_set(&opts, "tune", "zerolatency", 0);
 
-    m_codecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    // m_codecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
     if (avcodec_open2(m_codecCtx, codec, &opts) < 0) {
         qDebug() << "Could not open codec";
         return false;
+    }
+
+    // 在 VideoEncoder::init() 中，打开编码器后立即添加：
+    if (m_codecCtx->extradata && m_codecCtx->extradata_size > 0) {
+        DEBUG() << "Encoder extradata size:" << m_codecCtx->extradata_size;
+        // 这里面就有 SPS+PPS，可以在第一帧时主动发送
     }
 
     // 4. Allocate YUV frame buffers
@@ -161,15 +168,19 @@ void VideoEncoder::encode(const QVideoFrame& inputFrame) {
                     
                     uint32_t rtpTimestamp = 0;
                     if (m_pkt->pts != AV_NOPTS_VALUE) {
-                        // time_base = {1, fps}, so pts is frame index
-                        // 90kHz ticks per frame = 90000 / fps (e.g., fps=30 -> 3000)
-                        rtpTimestamp = static_cast<uint32_t>(m_pkt->pts * (90000 / 30));
+                        int denom = (m_fps > 0) ? m_fps : 30;
+                        rtpTimestamp = static_cast<uint32_t>(m_pkt->pts * (90000 / denom));
                     }
 
                     // Callback with NAL data and timestamp
                     onEncodedData(nalBuffer, rtpTimestamp);
                 }
 
+                int nalType = data[nalStart] & 0x1F;
+                DEBUG() << "NAL type:" << nalType << "size:" << nalSize;
+                if (nalType == 7) DEBUG() << "  -> SPS";
+                if (nalType == 8) DEBUG() << "  -> PPS";
+                if (nalType == 5) DEBUG() << "  -> IDR";
                 curPos = nextNalStart;
             }
         }

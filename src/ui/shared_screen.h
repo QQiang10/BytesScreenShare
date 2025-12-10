@@ -124,10 +124,14 @@ private slots:
 
     void updateList(const QJsonArray& list);
     void onJoined(const QString& id);
+    void onDataChannelOpened(bool isCaller);
+    void onSourceReady();
 
 private:
     // ===== 帮助函数 =====
     void toggleChatPanel();
+    void mountVideoWidget(QWidget* w);
+    void clearVideoWidget();
     void ensureParticipantsDock();
     void appendSystemMessage(const QString &text);
     void appendRemoteMessage(const QString &sender, const QString &text);
@@ -192,6 +196,9 @@ private:
     QPointer<QPushButton> btnRaiseHand;
     QPointer<QPushButton> btnLeave;
     QPointer<QLabel> netLabel;
+
+    // 当前嵌入屏幕预览/渲染的视频控件
+    QPointer<QWidget> currentVideoWidget;
 
     // 定时器
     QPointer<QTimer> netTimer;

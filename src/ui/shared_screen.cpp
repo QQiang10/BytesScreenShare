@@ -1,5 +1,6 @@
 #include "shared_screen.h"
 #include <ui_shared_screen.h>
+#include "src/render/VideoOpenGLWidget.h"
 
 // 添加诊断函数
 void shared_screen::log(const QString& msg) {
@@ -414,8 +415,11 @@ void shared_screen::on_btnJoinMeetingClicked()
 
     connect(pcMgr, &PeerConnectionManager::dataChannelOpened,
         CaptureService, &ScreenCaptureService::onDCOpened);
-    auto worker = CaptureService->getWorker();
-    QObject::connect(worker, &VideoWorker::rtpPacketReady, pcMgr, &PeerConnectionManager::sendEncodedVideoFrame);
+    connect(pcMgr, &PeerConnectionManager::dataChannelOpened,
+        this, &shared_screen::onDataChannelOpened);
+    connect(CaptureService, &ScreenCaptureService::resourceReady,
+        this, &shared_screen::onSourceReady);
+
     pcMgr->onConnectServer(url);
 }
 
@@ -493,6 +497,7 @@ void shared_screen::on_btnShareScreenClicked()
     {
         ui->screenPreview->setText(u8"屏幕预览区域\n点击共享屏幕开始");
         ui->statusLabel->setText(u8"未共享");
+        clearVideoWidget();
     }
     // =============== 之后的逻辑 ===============
 }
@@ -521,6 +526,79 @@ void shared_screen::on_btnSendClicked()
     ui->chatView->append(html);
     ui->chatInput->clear();
     ui->chatInput->setFocus();
+}
+
+void shared_screen::onDataChannelOpened(bool isCaller)
+{
+    // datachannel 建立后，初始化 CaptureService 已由 onDCOpened 完成
+    if (isCaller) {
+        mountVideoWidget(CaptureService->getVideoPreviewWidget());
+    } else {
+        mountVideoWidget(CaptureService->getRenderWidget());
+    }
+}
+
+void shared_screen::onSourceReady()
+{
+    auto videoWorker = CaptureService->getVideoWorker();
+    if(videoWorker) {
+        QObject::connect(videoWorker, &VideoWorker::rtpPacketReady, pcMgr, &PeerConnectionManager::sendEncodedVideoFrame);
+        return;
+    }
+    
+    
+    auto renderWorker = CaptureService->getRenderWorker();
+    if(renderWorker) {
+        QObject::connect(pcMgr, &PeerConnectionManager::encodedFrameReceived, 
+            renderWorker, &RenderWorker::onEncodedPacket, Qt::QueuedConnection);
+        return;
+    }
+    FATAL() << "Check your workers setup!";
+}
+
+void shared_screen::mountVideoWidget(QWidget* w)
+{
+    if (!w || !ui->screenPreview) return;
+
+    // 清空占位文本
+    ui->screenPreview->setText("");
+
+    // 为 QLabel 设置布局容器（仅初始化一次）
+    if (!ui->screenPreview->layout()) {
+        auto lay = new QVBoxLayout(ui->screenPreview);
+        lay->setContentsMargins(0,0,0,0);
+        lay->setSpacing(0);
+    }
+
+    auto lay = ui->screenPreview->layout();
+
+    // 移除旧的视频控件
+    if (currentVideoWidget && currentVideoWidget != w) {
+        lay->removeWidget(currentVideoWidget);
+        currentVideoWidget->hide();
+        currentVideoWidget->setParent(nullptr);
+    }
+
+    // 挂载新控件
+    if (w->parent() != ui->screenPreview)
+        w->setParent(ui->screenPreview);
+    lay->addWidget(w);
+    w->show();
+    currentVideoWidget = w;
+}
+
+void shared_screen::clearVideoWidget()
+{
+    if (!ui->screenPreview) return;
+    if (auto lay = ui->screenPreview->layout()) {
+        if (currentVideoWidget) {
+            lay->removeWidget(currentVideoWidget);
+            currentVideoWidget->hide();
+            currentVideoWidget->setParent(nullptr);
+        }
+    }
+    currentVideoWidget = nullptr;
+    ui->screenPreview->setText(u8"屏幕预览区域\n点击共享屏幕开始");
 }
 
 // 点击摄像头按钮

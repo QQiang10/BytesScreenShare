@@ -362,7 +362,7 @@ QPushButton:pressed {
          <widget class="QLabel" name="screenPreview">
           <property name="text">
            <string>屏幕预览区域
-点击"共享屏幕"开始</string>
+    点击"共享屏幕"开始</string>
           </property>
           <property name="alignment">
            <set>Qt::AlignCenter</set>
