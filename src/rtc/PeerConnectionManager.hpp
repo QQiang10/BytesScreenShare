@@ -26,19 +26,19 @@ signals:
     void peersList(const QJsonArray& list);
     void p2pConnected();     // datachannel has established
     void p2pDisconnected();
-    void encodedFrameReceived(QByteArray data);
+    void encodedFrameReceived(const QByteArray& data);
 
     void connected();
     void disconnected();
     void errorOccurred(const QString& msg);
     void messageReceived(const QString& msg); 
-    void dataChannelOpened();
+    void dataChannelOpened(bool isCaller);
 
 public:
     void onConnectServer(const QString& url);
     void onSignalingMessage(const QJsonObject& obj);
     void onJoined(const QString& peerId);
-    void sendEncodedFrame(const QByteArray& data, uint32_t timestamp);
+    void onList(const QJsonArray& list);
 
 private:
     void handleSignalingMessage(const QJsonObject& json);
