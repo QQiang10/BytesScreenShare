@@ -49,13 +49,5 @@
 * **libdatachannel** 库
 * **C++17** 支持的现代编译器
 
-### 开始使用
-1. 直接用 IDE 打开构建目录或采用 CMake 创建工程。（需要事先完成[libdatachannel](https://github.com/paullouisageneau/libdatachannel)与 ffmpeg 的编译部署）
-2. 配置 `CMakeLists.txt` ：修改文件中指定的 Qt 目录，定位到自身的所安装的版本路径（例如 `C:/Qt/6.x/msvc...`）。
-3. 依次构建客户端和信令端组件。
-4. **Qt dll 部署**：编译出的 `.exe` 本地运行时可能报缺失 DLL 错误。呼出终端定位到目标输出的目录并执行 `windeployqt` 进行补充构建：
-   ```bash
-   # 具体路径因安装环境而异
-   windeployqt shared_screen.exe
-   ```
-5. 先启动 `signaling-server.exe` 挂载信令后端服务，随后启动并交互 `shared_screen.exe` 加入应用频道。
+### 详细指南
+见[环境配置](./Environment.md)
